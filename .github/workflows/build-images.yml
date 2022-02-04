@@ -2,10 +2,10 @@ name: Build base image
 
 on:
   push:
-    branches: [ main ]
+    branches: [ noetic ]
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ noetic ]
 
 jobs:    
   rosdevbase:
