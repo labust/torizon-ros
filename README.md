@@ -3,10 +3,8 @@ This repository extends the Toradex Torizon Debian `bullseye` docker images.
 
 The `torizon-ros-base` image is build with a custom `boost` 1.72 version and `ROS Noetic` built from source. 
 
-The `d2-roadmap` and `d2-kenautics` images are built on top of the `torizon-ros-base` image. The images contain the necessary code to run software on Dinis.
-
 ## How to build
-The `torizon-ros-base`, `d2-roadmap` and `d2-kenautics` images are rebuilt on each update. 
+The `torizon-ros-base` image is rebuilt on each update. 
 
 The custom `boost` and `ROS Noetic` images are not built automatically as they take a long time and will not be rebuilt that often. Under the `Actions` tab you can find two workflows that can be launched manually on a desired branch in order to rebuild this docker images. These two docker images contain the binaries which are copied into the `torizon-ros-base` docker image.
 
