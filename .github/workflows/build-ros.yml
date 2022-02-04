@@ -1,0 +1,44 @@
+name: Custom ROS build workflow
+
+on:
+  workflow_dispatch:
+    
+jobs:
+  rosdevbase:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      
+    - name: Build rosdev base stage
+      uses: ./.github/actions/docker-build-stage
+      with:   
+        stage-name: rosdevbase
+        tag-name: ghcr.io/labust/torizon-ros-base:noetic-build-base
+        context: build-support/rosdevbase
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+  
+  rosbuilder:
+    needs: [rosdevbase]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+        
+    - name: Build rosbuilder stage
+      uses: ./.github/actions/docker-build-stage
+      with:   
+        stage-name: rosbuilder
+        tag-name: ghcr.io/labust/torizon-ros-base:noetic-binaries
+        context: build-support/rosbuilder
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+

@@ -1,0 +1,104 @@
+ARG IMAGE_ARCH=linux/arm64
+ARG BASE_NAME=qt5-wayland-examples-vivante
+ARG IMAGE_TAG=2
+ARG DOCKER_REGISTRY=torizon
+
+## Build custom boost 1.72 (to support current version GeminiSDK)
+FROM --platform=$IMAGE_ARCH $DOCKER_REGISTRY/$BASE_NAME:$IMAGE_TAG as boostbuilder
+
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
+        wget \
+        bzip2 \
+        build-essential \
+        python3-dev \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/boost/build && cd /opt/boost \
+    && wget https://boostorg.jfrog.io/artifactory/main/release/1.72.0/source/boost_1_72_0.tar.bz2  \
+    && tar --bzip2 -xf boost_1_72_0.tar.bz2 && cd /opt/boost/boost_1_72_0 \
+    && ./bootstrap.sh --prefix=/opt/boost/build/ --with-libraries=all --with-python=/usr/bin/python3 \
+    && ./b2 install \
+    && cd /opt/boost && rm -rf /opt/boost/boost_1_72_0 boost_1_72_0.tar.bz2
+
+
+## Base image with preconfigured ROS sources and basic setup
+FROM --platform=$IMAGE_ARCH $DOCKER_REGISTRY/$BASE_NAME:$IMAGE_TAG AS rosdevbase
+
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
+    gnupg \
+    ca-certificates \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+RUN sh -c 'echo "deb http://packages.ros.org/ros/ubuntu buster main" > /etc/apt/sources.list.d/ros-latest.list' \
+    && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
+    python3-rosdep \
+    python3-rosinstall-generator \ 
+    build-essential \
+    python3-vcstool \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+RUN rosdep init && rosdep --os=debian:buster --rosdistro=noetic update
+
+## Build ROS Noetic binaries from source for our OS
+FROM --platform=$IMAGE_ARCH rosdevbase AS rosbuilder
+RUN mkdir -p /opt/rosws/src 
+WORKDIR /opt/rosws
+
+RUN mkdir -p /opt/rosws/src && cd /opt/rosws \
+    && rosinstall_generator \
+        ros_base \
+        robot_localization \
+        geographic_msgs \
+        tf2_ros \ 
+        diagnostics \
+        cv_bridge \
+        image_transport --rosdistro noetic --deps --tar > noetic-desktop.rosinstall \ 
+    && vcs import --input noetic-desktop.rosinstall ./src 
+
+RUN echo "#!/bin/bash" > install_dependencies.sh && chmod +x ./install_dependencies.sh \
+    && rosdep --os=debian:buster install --from-paths ./src --ignore-src --skip-keys=boost --rosdistro noetic -y -s >> install_dependencies.sh \
+    && sed -i 's/-y/& --no-install-recommends/' install_dependencies.sh \ 
+    && apt-get -y update && apt-get install -y --no-install-recommends \
+        libopencv-gapi4.4 \
+    && ./install_dependencies.sh \
+    && apt-get remove libboost* \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+COPY --from=boostbuilder /opt/boost/build/include /usr/include
+COPY --from=boostbuilder /opt/boost/build/lib /usr/lib/
+
+COPY OpenCVModules-release.cmake /usr/lib/aarch64-linux-gnu/cmake/opencv4/
+
+RUN ./src/catkin/bin/catkin_make_isolated -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.9 \ 
+    --install --install-space /opt/ros/noetic -DCMAKE_BUILD_TYPE=Release
+
+##################################################################################
+
+FROM --platform=$IMAGE_ARCH rosdevbase AS devbase
+
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
+    iputils-ping \
+    git \
+    minicom \
+    python3-pip \
+    python3-catkin-tools \
+    python3-wstool \
+    python3-dev \
+    vim \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+COPY --from=rosbuilder /opt/ros/noetic /opt/ros/noetic
+COPY --from=rosbuilder /opt/rosws/install_dependencies.sh /opt/ros/noetic/install_dependencies.sh
+
+RUN apt-get -y update && opt/ros/noetic/install_dependencies.sh \
+    && apt-get install -y --no-install-recommends \ 
+        libopencv-gapi4.4 \
+    && apt-get remove libboost* \
+    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+
+COPY --from=boostbuilder /opt/boost/build/include /usr/include
+COPY --from=boostbuilder /opt/boost/build/lib /usr/lib
+
+WORKDIR /root

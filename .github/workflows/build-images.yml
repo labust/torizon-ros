@@ -1,0 +1,46 @@
+name: Build base image
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:    
+  rosdevbase:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      
+    - name: Build rosdev base stage
+      uses: ./.github/actions/docker-build-stage
+      with:   
+        stage-name: rosdevbase
+        tag-name: ghcr.io/labust/torizon-ros-base:noetic-build-base
+        context: build-support/rosdevbase
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+  
+  base:
+    needs: [rosdevbase]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+        
+    - name: Build base image
+      uses: ./.github/actions/docker-build-stage
+      with:   
+        stage-name: devbase
+        tag-name: ghcr.io/labust/torizon-ros-base:latest
+        context: torizon-ros-base
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}

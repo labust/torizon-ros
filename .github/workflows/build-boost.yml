@@ -1,0 +1,25 @@
+name: Custom boost build workflow
+
+on:
+  workflow_dispatch:
+    
+jobs:
+  boostbuilder:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      
+    - name: Build boost stage
+      uses: ./.github/actions/docker-build-stage
+      with:   
+        stage-name: boostbuilder
+        tag-name: ghcr.io/labust/torizon-ros-base:boost1.72-binaries
+        context: build-support/boostbuilder
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+
